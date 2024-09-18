@@ -1,0 +1,4 @@
+art==6.0
+requests==2.32.3
+croniter==3.0.3
+cron-descriptor==1.4.5
