@@ -129,6 +129,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(mes
 
 ### Attach signal handlers for SIGTERM (docker stop)
 signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler) ### When run with --rm and CTRL+C
 
 ### Scheduled cron job list (RS_<SCRIPT_NAME>)
 cron_jobs = []
