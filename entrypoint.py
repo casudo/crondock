@@ -1,5 +1,6 @@
 import subprocess
 import pytz
+import signal
 from os import getenv, environ
 from time import sleep
 from croniter import croniter, CroniterBadCronError, CroniterBadDateError
@@ -11,6 +12,12 @@ from pathlib import Path
 ### ----------------------------------------------------------------------------------------------------------
 ### ----------------------------------------------------------------------------------------------------------
 ### ----------------------------------------------------------------------------------------------------------
+
+
+### Graceful shutdown function
+def signal_handler(signum, frame):
+    logging.info(f"Received {signum}. Exiting gracefully...")
+    exit(1)
 
 
 ### Convert cron expression to timestamp
@@ -82,6 +89,8 @@ def convert_to_current_tz(dt: datetime) -> datetime:
 ### ----------------------------------------------------------------------------------------------------------
 ### ----------------------------------------------------------------------------------------------------------
 
+### Attach signal handlers for SIGTERM (docker stop)
+signal.signal(signal.SIGTERM, signal_handler)
 
 ### Scheduled cron job list (RS_<SCRIPT_NAME>)
 cron_jobs = []
