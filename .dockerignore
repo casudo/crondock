@@ -1,0 +1,8 @@
+LICENSE
+README.md
+Dockerfile
+.*
+.*/
+
+### Development
+testing/
