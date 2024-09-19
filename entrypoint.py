@@ -107,7 +107,7 @@ cron_jobs = []
 script_list = [key[3:] for key in environ if key.startswith("RS_")]
 
 ### Display a welcoming message in Docker logs
-logging.info("\nContainer started. Welcome!")
+logging.info("Container started. Welcome!\n")
 
 logging.info("\nScripts and their cron expressions:")
 for script_name in script_list:
@@ -145,7 +145,7 @@ for script_name in script_list:
 if cron_jobs:
     next_job = min(cron_jobs, key=lambda job: job["next_execution_timestamp"])
     next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"])).strftime("%A, %B %d, %Y %I:%M %p")
-    logging.info(f"\n--> First execution will be {next_job['script_name']} on: {next_execution_readable}")
+    logging.info(f"--> First execution will be {next_job['script_name']} on: {next_execution_readable}")
 
 ### Initialize next_execution_time
 next_execution_time = min(job["next_execution_timestamp"] for job in cron_jobs)
