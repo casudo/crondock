@@ -9,6 +9,8 @@ Crondock is a solution to run cron jobs in Docker containers. It's a simple Pyth
   - [Docker Compose](#docker-compose)
 - [Planned for the future](#planned-for-the-future)
 
+--- 
+
 ## Docker
 Before starting the container, you'll need to set some mandatory environment variables:  
 
@@ -19,15 +21,15 @@ Before starting the container, you'll need to set some mandatory environment var
 
 You can add as many scripts as you want, just follow the above format.
 
-> [!NOTE]
-Make sure that those scripts are mounted properly in the container!
+> [!IMPORTANT]
+Make sure that those scripts are mounted properly in the container AND that they are executable!
 
 ### Docker Run
 ```bash
 docker run -d \  
     --name crondock \ 
     --restart unless-stopped \
-    -v /path/to/your/scripts:/code \
+    -v /path/to/your/scripts:/code/scripts \
     -e RS_TESTSCRIPT="*/1 * * * *" \
     -e RS_OTHERSCRIPT="*/5 * * * *" \
     -e TZ=Europe/Berlin \
@@ -44,7 +46,7 @@ services:
     image: ghcr.io/casudo/grei:latest
     restart: unless-stopped
     volumes:
-      - /path/to/your/scripts:/code
+      - /path/to/your/scripts:/code/scripts
     environment:
         - RS_TESTSCRIPT="*/1 * * * *"
         - RS_OTHERSCRIPT="*/5 * * * *"
@@ -55,4 +57,5 @@ Save the above as `docker-compose.yml` and run it with `docker-compose up -d`.
 
 ## Planned for the future
 - Better error handling
+- Guide on how to mount scripts and subfolders
 - (Instead of cron expression, use smth like "Every 5 minutes" or "Every 1 hour")
