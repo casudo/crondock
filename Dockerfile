@@ -1,13 +1,8 @@
-FROM python:3.12.0
+FROM python:3.12.0-slim
 
 ### Set working directory and copy files
-RUN mkdir /code
 WORKDIR /code
-ADD . /code/
-### TODO: Copy?
-
-### Make all scripts executable
-RUN chmod 770 /code/*
+COPY . /code
 
 ### Install dependencies (trusted-host due to SSL error: https://stackoverflow.com/a/29751768)
 RUN pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org -r requirements.txt
