@@ -1,4 +1,5 @@
 import subprocess
+import pytz
 from os import getenv, environ
 from time import sleep
 from croniter import croniter, CroniterBadCronError, CroniterBadDateError
@@ -62,6 +63,19 @@ def run_script(script_name: str) -> None:
         subprocess.run(["python3", script_path])
     else:
         print(f"Unsupported script type for {script_name}")
+
+
+def convert_to_current_tz(dt: datetime) -> datetime:
+    """Converts a datetime object to the current timezone.
+
+    Args:
+        dt (datetime): A datetime object
+
+    Returns:
+        datetime: The datetime object in the current timezone
+    """
+    current_tz = pytz.timezone(getenv("TZ"))
+    return dt.astimezone(current_tz)
 
 
 ### ----------------------------------------------------------------------------------------------------------
@@ -136,7 +150,7 @@ while True:
             ### Print next execution time
             next_times = [job["next_execution_timestamp"] for job in cron_jobs]
             next_execution_time = min(next_times)
-            next_execution_readable = datetime.fromtimestamp(next_execution_time).strftime("%A, %B %d, %Y %I:%M %p")
+            next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_execution_time)).strftime("%A, %B %d, %Y %I:%M %p")
             next_job = next((j for j in cron_jobs if j["next_execution_timestamp"] == next_execution_time), None)
             if next_job:
                 print(f"\n\n--> Next execution will be {next_job['script_name']} on: {next_execution_readable}")
