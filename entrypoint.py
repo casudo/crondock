@@ -74,7 +74,7 @@ def convert_to_current_tz(dt: datetime) -> datetime:
     Returns:
         datetime: The datetime object in the current timezone
     """
-    current_tz = pytz.timezone(getenv("TZ"))
+    current_tz = pytz.timezone(getenv("TZ", "Europe/Berlin"))
     return dt.astimezone(current_tz)
 
 
@@ -126,7 +126,7 @@ for script_name in script_list:
 ### Determine the first script to run and print its next execution time
 if cron_jobs:
     next_job = min(cron_jobs, key=lambda job: job["next_execution_timestamp"])
-    next_execution_readable = datetime.fromtimestamp(next_job["next_execution_timestamp"]).strftime("%A, %B %d, %Y %I:%M %p") # TODO: CEST
+    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"]).strftime("%A, %B %d, %Y %I:%M %p"))
     print(f"\n--> First execution will be {next_job['script_name']} on: {next_execution_readable}")
 
 ### Initialize next_execution_time

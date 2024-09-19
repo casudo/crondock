@@ -15,7 +15,7 @@ Before starting the container, you'll need to set some mandatory environment var
 | Variable | Required | Description |
 | --- | --- | --- |
 | `RS_<x>` | No | The cron expression when the script should run (e.g. `0 11 1,15 * *`). `<x>` is the name of your script (without the extension!). |
-| `TZ` | No | Specify the timezone for the container. Default is `UTC`. |
+| `TZ` | No | Specify the timezone for the container. Default is `Europe/Berlin`. |
 
 You can add as many scripts as you want, just follow the above format.
 
