@@ -1,6 +1,9 @@
 import subprocess
 import pytz
+import logging
 import signal
+import concurrent.futures
+from sys import exit
 from os import getenv, environ
 from time import sleep
 from croniter import croniter, CroniterBadCronError, CroniterBadDateError
@@ -51,7 +54,7 @@ def is_valid_cron(cron_expression: str) -> bool:
         return True
     except (CroniterBadCronError, CroniterBadDateError):
         return False
-    
+
 
 ### Run script function
 def run_script(script_name: str) -> None:
@@ -60,7 +63,7 @@ def run_script(script_name: str) -> None:
     Args:
         script_name (str): The name of the script to run (e.g. "testscript.sh")
     """
-    print(f"----> Running {script_name}...\n")
+    logging.info(f"----> Running {script_name}...\n")
     script_path = f"/code/{script_name}"
     if script_name.endswith(".sh"):
         subprocess.run([script_path])
@@ -69,7 +72,8 @@ def run_script(script_name: str) -> None:
     elif script_name.endswith(".py"):
         subprocess.run(["python3", script_path])
     else:
-        print(f"Unsupported script type for {script_name}")
+        logging.error(f"Unsupported script type for {script_name}")
+        exit(1)
 
 
 def convert_to_current_tz(dt: datetime) -> datetime:
@@ -89,6 +93,10 @@ def convert_to_current_tz(dt: datetime) -> datetime:
 ### ----------------------------------------------------------------------------------------------------------
 ### ----------------------------------------------------------------------------------------------------------
 
+
+### Setup logging
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%d.%m.%Y %H:%M:%S %Z")
+
 ### Attach signal handlers for SIGTERM (docker stop)
 signal.signal(signal.SIGTERM, signal_handler)
 
@@ -99,15 +107,14 @@ cron_jobs = []
 script_list = [key[3:] for key in environ if key.startswith("RS_")]
 
 ### Display a welcoming message in Docker logs
-print("\nContainer started. Welcome!")
-# print("⏳ Checking environment variables...")
+logging.info("\nContainer started. Welcome!")
 
-print("\nScripts and their cron expressions:")
+logging.info("\nScripts and their cron expressions:")
 for script_name in script_list:
     cron_expression = getenv(f"RS_{script_name}", None)
     if cron_expression and is_valid_cron(cron_expression):
         script_file = script_name.lower()  # Assumption: script names are in lowercase
-        
+
         ### Determine the script type by checking the /code directory
         script_path = Path("/code")
         found_script = None
@@ -125,45 +132,49 @@ for script_name in script_list:
                 "next_execution_timestamp": next_execution_timestamp
             })
             cron_description = get_description(cron_expression)
-            print(f"  - {found_script}: {cron_expression} ({cron_description})")
+            logging.info(f"  - {found_script}: {cron_expression} ({cron_description})")
         else:
-            print(f"  - {script_name}: Unsupported script type or file not found")
+            logging.error(f"  - {script_name}: Unsupported script type or file not found")
+            exit(1)
     else:
-        print(f"  - {script_name}: Invalid or missing cron expression")
+        logging.error(f"  - {script_name}: Invalid or missing cron expression")
+        exit(1)
 
 
 ### Determine the first script to run and print its next execution time
 if cron_jobs:
     next_job = min(cron_jobs, key=lambda job: job["next_execution_timestamp"])
-    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"]).strftime("%A, %B %d, %Y %I:%M %p"))
-    print(f"\n--> First execution will be {next_job['script_name']} on: {next_execution_readable}")
+    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"])).strftime("%A, %B %d, %Y %I:%M %p")
+    logging.info(f"\n--> First execution will be {next_job['script_name']} on: {next_execution_readable}")
 
 ### Initialize next_execution_time
 next_execution_time = min(job["next_execution_timestamp"] for job in cron_jobs)
 
-### Endless loop
-while True:
-    current_time_timestamp = datetime.now().timestamp()
+### Parallel Execution with ThreadPoolExecutor
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    ### Endless loop
+    while True:
+        current_time_timestamp = datetime.now().timestamp()
 
-    for job in cron_jobs:
-        script_name = job["script_name"]
-        next_execution_timestamp = job["next_execution_timestamp"]
+        for job in cron_jobs:
+            script_name = job["script_name"]
+            next_execution_timestamp = job["next_execution_timestamp"]
 
-        if current_time_timestamp >= next_execution_timestamp:
-            ### Execute script
-            run_script(script_name)
+            if current_time_timestamp >= next_execution_timestamp:
+                ### Execute script asynchronously
+                executor.submit(run_script, script_name)
 
-            ### Plan next execution
-            job["next_execution_timestamp"] = convert_cron_to_timestamp(job["cron_expression"])
+                ### Plan next execution
+                job["next_execution_timestamp"] = convert_cron_to_timestamp(job["cron_expression"])
 
-            ### Print next execution time
-            next_times = [job["next_execution_timestamp"] for job in cron_jobs]
-            next_execution_time = min(next_times)
-            next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_execution_time)).strftime("%A, %B %d, %Y %I:%M %p")
-            next_job = next((j for j in cron_jobs if j["next_execution_timestamp"] == next_execution_time), None)
-            if next_job:
-                print(f"\n\n--> Next execution will be {next_job['script_name']} on: {next_execution_readable}")
+                ### Print next execution time
+                next_times = [job["next_execution_timestamp"] for job in cron_jobs]
+                next_execution_time = min(next_times)
+                next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_execution_time)).strftime("%A, %B %d, %Y %I:%M %p")
+                next_job = next((j for j in cron_jobs if j["next_execution_timestamp"] == next_execution_time), None)
+                if next_job:
+                    logging.info(f"\n\n--> Next execution will be {next_job['script_name']} on: {next_execution_readable}")
 
-    ### Sleep until the next scheduled execution
-    sleep_duration = next_execution_time - current_time_timestamp
-    sleep(max(0, sleep_duration))  # Avoid negative sleep duration
+        ### Sleep until the next scheduled execution
+        sleep_duration = next_execution_time - current_time_timestamp
+        sleep(max(0, sleep_duration))  # Avoid negative sleep duration
