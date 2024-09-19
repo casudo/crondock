@@ -54,7 +54,5 @@ services:
 Save the above as `docker-compose.yml` and run it with `docker-compose up -d`.  
 
 ## Planned for the future
-- Better logging
 - Better error handling
 - (Instead of cron expression, use smth like "Every 5 minutes" or "Every 1 hour")
-- Parallel Execution
