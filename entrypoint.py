@@ -117,7 +117,7 @@ def check_file_or_folder_exists(script_name: str) -> bool:
 ### Extension map for different script types
 EXTENSION_MAP = {
     ".sh": ["/bin/bash"],
-    # ".pl": ["perl"],
+    ".pl": ["perl"],
     ".py": ["python3"],
 }
 
