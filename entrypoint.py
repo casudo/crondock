@@ -17,13 +17,11 @@ from pathlib import Path
 ### ----------------------------------------------------------------------------------------------------------
 
 
-### Graceful shutdown function
 def signal_handler(signum, frame):
     logging.info(f"Received {signum}. Exiting gracefully...")
     exit(1)
 
 
-### Convert cron expression to timestamp
 def convert_cron_to_timestamp(cron_expression: str) -> float:
     """Converts a cron expression to a timestamp.
 
@@ -39,7 +37,6 @@ def convert_cron_to_timestamp(cron_expression: str) -> float:
     return next_execution.timestamp()
 
 
-### Validate cron expression
 def is_valid_cron(cron_expression: str) -> bool:
     """Validates a cron expression.
 
@@ -52,11 +49,11 @@ def is_valid_cron(cron_expression: str) -> bool:
     try:
         croniter(cron_expression)
         return True
-    except (CroniterBadCronError, CroniterBadDateError):
+    except (CroniterBadCronError, CroniterBadDateError) as e:
+        logging.error(f"Invalid cron expression '{cron_expression}': {str(e)}")
         return False
 
 
-### Run script function
 def run_script(script_name: str) -> None:
     """Runs a script based on its extension.
 
