@@ -67,28 +67,6 @@ def is_valid_cron(cron_expression: str) -> bool:
         return False
 
 
-def run_script(script_name: str) -> None:
-    """Runs a script based on its extension.
-
-    Args:
-        script_name (str): The name of the script to run (e.g. "testscript.sh")
-    """
-    script_path_base = Path(f"/code/scripts/{script_name}")
-    
-    ### Try different extensions
-    for ext in EXTENSION_MAP.keys():
-        script_path = script_path_base.with_suffix(ext)
-        if script_path.exists():
-            command = EXTENSION_MAP[ext] + [script_path]
-            logging.info(f"----> Running {script_path}...\n")
-            subprocess.run(command)
-            return
-    
-    ### Log and handle unsupported script types
-    logging.error(f"Unsupported script type for {script_name}")
-    exit(1)
-
-
 def convert_to_current_tz(dt: datetime) -> datetime:
     """Converts a datetime object to the current timezone.
 
@@ -102,131 +80,156 @@ def convert_to_current_tz(dt: datetime) -> datetime:
     return dt.astimezone(current_tz)
 
 
-def check_file_or_folder_exists(script_name: str) -> bool:
-    """Checks if a script or folder/script exists in the /code/scripts directory.
+def parse_cron_env_variable(env_value: str):
+    """Parses a cron environment variable to extract cron expression, script path, and parameters.
 
     Args:
-        script_name (str): The name of the script or folder/script (e.g. "testscript")
+        env_value (str): The value of the environment variable.
 
     Returns:
-        bool: True if the script or folder/script exists, False if not.
+        dict: Contains 'cron_expression', 'script_path', 'parameters'
     """
-    script_path_base = Path(f"/code/scripts/{script_name}")
+    parts = env_value.split(",")
+    cron_expression = parts[0].strip() if len(parts) > 0 else None
+    script_path_full = parts[1].strip() if len(parts) > 1 else None
+    parameters = parts[2].strip().split() if len(parts) > 2 else []
     
-    for ext in EXTENSION_MAP.keys():
-        script_path = script_path_base.with_suffix(ext)
-        if script_path.exists():
-            return True # TODO: Return folder, name and extensions one by one
+    return {
+        "cron_expression": cron_expression,
+        "script_path_full": script_path_full,
+        "parameters": parameters
+    }
+
+
+def run_script(script_path_relative: str, script_path_full: str, parameters: list) -> None:
+    """Runs the script with optional parameters using the appropriate interpreter.
+
+    Args:
+        script_path (str): The path to the script.
+        parameters (list): List of parameters to pass to the script.
+    """
+    script_path_obj = Path(script_path_full)
     
-    logging.error(f"{script_name} doesn't seem to exist in the /code/scripts directory or it has the wrong file extension.")
-    return False
-
-
-### ----------------------------------------------------------------------------------------------------------
-### ----------------------------------------------------------------------------------------------------------
-### ----------------------------------------------------------------------------------------------------------
-
-
-### Extension map for different script types
-EXTENSION_MAP = {
-    ".sh": ["/bin/bash"],
-    ".pl": ["perl"],
-    ".py": ["python3"],
-}
-
-### Setup logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%d.%m.%Y %H:%M:%S %Z")
-
-### Attach signal handlers for SIGTERM (docker stop)
-signal.signal(signal.SIGTERM, signal_handler)
-signal.signal(signal.SIGINT, signal_handler) ### When run with --rm and CTRL+C
-
-### Scheduled cron job list (RS_<SCRIPT_NAME>)
-cron_jobs = []
-
-### Filter environment variables that start with "RS_"
-script_list = [key[3:] for key in environ if key.startswith("RS_")]
-
-### Display a welcoming message in Docker logs
-logging.info("Container started. Welcome!\n")
-
-logging.info("Checking if scripts and folders exist:")
-all_checks_passed = True
-for script_name in script_list:
-    cron_expression = getenv(f"RS_{script_name}", None)
-    
-    ### Check if script or folder/script exists
-    if "_" in script_name:
-        folder, script = script_name.split("_", 1)
-        script_file = f"{folder}/{script.lower()}"
+    if script_path_obj.exists():
+        # Determine the interpreter based on the file extension
+        command = []
+        for ext, interpreter in EXTENSION_MAP.items():
+            if script_path_obj.suffix == ext:
+                command = interpreter + [str(script_path_obj)] + parameters
+                break
+        
+        if command and parameters:
+            logging.info(f"Running script: {script_path_relative} with parameters: {' '.join(parameters)}")
+            subprocess.run(command)
+        elif command:
+            logging.info(f"Running script: {script_path_relative}")
+            subprocess.run(command)
+        else:
+            logging.error(f"Unsupported script extension for script: {script_path_relative}")
     else:
-        script_file = script_name.lower()
-
-    ### Check if the file or folder exists
-    if not check_file_or_folder_exists(script_file):
-        all_checks_passed = False
-        continue  # Skip cron check if file doesn't exist
-
-    ### Validate the cron expression if the file/folder check passed
-    if cron_expression and is_valid_cron(cron_expression):
-        cron_description = get_description(cron_expression) # IndexError CAN occur here if e.g. day of week is out of range
-        logging.info(f"  - {script_file}: {cron_expression} ({cron_description})")
-    else:
-        logging.error(f"  - {script_name}: Invalid or missing cron expression")
-        all_checks_passed = False
+        logging.error(f"Script not found: {script_path_relative}")
 
 
-### Only proceed if all checks are passed
-if all_checks_passed:
-    logging.info("All scripts, folders, and cron expressions are valid. Proceeding...\n")
 
-    ### Determine the first script to run and print its next execution time
-    for script_name in script_list:
-        cron_expression = getenv(f"RS_{script_name}", None)
-        script_file = script_name.lower() if "_" not in script_name else f"{script_name.split('_')[0]}/{script_name.split('_')[1].lower()}"
+def load_cron_jobs() -> list:
+    """Loads cron jobs from environment variables.
 
-        next_execution_timestamp = convert_cron_to_timestamp(cron_expression)
-        cron_jobs.append({
-            "script_name": script_file,
-            "cron_expression": cron_expression,
-            "next_execution_timestamp": next_execution_timestamp
-        })
+    Returns:
+        list: A list of cron jobs with script path, parameters, cron expression, and next execution timestamp.
+    """
+    cron_jobs = []
 
+    logging.info("Installed cron jobs:")
+
+    ### Loop through all environment variables
+    for env_key, env_value in environ.items():
+        ### Check only relevant environment variables
+        if env_key.startswith("RS_CRON_"):
+            job_info = parse_cron_env_variable(env_value) # Cron expression, script path, parameters
+            ### TODO: "cron_expression, script_path, parameters = parse_cron_env_variable(env_value)" instead? 
+            cron_expression = job_info["cron_expression"]
+            script_path_full = job_info["script_path_full"]
+            script_path_relative = job_info["script_path_full"].replace("/code/scripts/", "../")
+            parameters = job_info["parameters"]
+
+            if not script_path_relative or not is_valid_cron(cron_expression): ### TODO: Check if path exists here
+                logging.error(f"Invalid configuration for {env_key}. Skipping.")
+                continue
+
+            ### Log loaded cron job
+            cron_description = get_description(cron_expression)
+            logging.info(f" - {script_path_relative}: {cron_expression} ({cron_description})")
+            if parameters:
+                logging.info(f"     - Parameters: {' '.join(parameters)}")
+
+            next_execution_timestamp = convert_cron_to_timestamp(cron_expression)
+            cron_jobs.append({
+                "script_path_full": script_path_full,
+                "script_path_relative": script_path_relative,
+                "parameters": parameters,
+                "cron_expression": cron_expression,
+                "next_execution_timestamp": next_execution_timestamp
+            })
+    
+    return cron_jobs
+
+
+def execute_cron_jobs(cron_jobs: list) -> None:
+    """Executes the cron jobs in parallel.
+
+    Args:
+        cron_jobs (list): A list of cron jobs with script path, parameters, cron expression, and next execution timestamp.
+    """
+    ### Log first execution time
     next_job = min(cron_jobs, key=lambda job: job["next_execution_timestamp"])
-    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"])).strftime("%A, %B %d, %Y %I:%M %p")
-    logging.info(f"--> First execution will be {next_job['script_name']} on: {next_execution_readable}")
-
-    ### Initialize next_execution_time
-    next_execution_time = min(job["next_execution_timestamp"] for job in cron_jobs)
+    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"])).strftime("%d.%m.%Y %H:%M:%S %Z")
+    logging.info(f"--> First execution will be: {next_job['script_path_relative']} at: {next_execution_readable}")
 
     ### Parallel Execution with ThreadPoolExecutor
     with concurrent.futures.ThreadPoolExecutor() as executor:
         ### Endless loop
         while True:
             current_time_timestamp = datetime.now().timestamp()
-
+       
             for job in cron_jobs:
-                script_name = job["script_name"]
                 next_execution_timestamp = job["next_execution_timestamp"]
 
                 if current_time_timestamp >= next_execution_timestamp:
                     ### Execute script asynchronously
-                    executor.submit(run_script, script_name)
+                    executor.submit(run_script, job["script_path_relative"], job["script_path_full"], job["parameters"])
 
                     ### Plan next execution
                     job["next_execution_timestamp"] = convert_cron_to_timestamp(job["cron_expression"])
 
-                    ### Print next execution time
-                    next_times = [job["next_execution_timestamp"] for job in cron_jobs]
-                    next_execution_time = min(next_times)
-                    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_execution_time)).strftime("%A, %B %d, %Y %I:%M %p")
-                    next_job = next((j for j in cron_jobs if j["next_execution_timestamp"] == next_execution_time), None)
-                    if next_job:
-                        logging.info(f"--> Next execution will be {next_job['script_name']} on: {next_execution_readable}")
+                    ### Log next execution time
+                    next_execution_readable = convert_to_current_tz(datetime.fromtimestamp(next_job["next_execution_timestamp"])).strftime("%d.%m.%Y %H:%M:%S %Z")
+                    logging.info(f"--> Next execution: {next_job['script_path_relative']} at: {next_execution_readable}")
 
-            ### Sleep until the next scheduled execution
+            ### Calculate sleep duration
+            next_execution_time = min(job["next_execution_timestamp"] for job in cron_jobs)
             sleep_duration = next_execution_time - current_time_timestamp
-            sleep(max(0, sleep_duration))  # Avoid negative sleep duration
-else:
-    logging.error("Some scripts or cron expressions are invalid. Exiting...")
-    exit(1)
+            sleep(max(0, sleep_duration))
+
+
+### ----------------------------------------------------------------------------------------------------------
+### ----------------------------------------------------------------------------------------------------------
+### ----------------------------------------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    ### Setup logging
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s", datefmt="%d.%m.%Y %H:%M:%S %Z")
+    
+    ### Attach signal handlers for SIGTERM (docker stop)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler) ### When run with --rm and CTRL+C
+
+    logging.info("Container started. Welcome!\n")
+
+    cron_jobs = load_cron_jobs()
+    
+    if cron_jobs:
+        logging.info("All scripts, folders, and cron expressions are valid. Proceeding...\n")
+        execute_cron_jobs(cron_jobs)
+    else:
+        logging.error("No valid cron jobs found. Exiting...")
+        exit(1)
