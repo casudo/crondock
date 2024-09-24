@@ -6,3 +6,5 @@ Dockerfile
 
 ### Development
 testing/
+venv/
+docker-compose.yaml
