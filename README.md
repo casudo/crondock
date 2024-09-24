@@ -14,8 +14,11 @@ Crondock is a solution to run cron jobs in Docker containers. It's a simple Pyth
 
 ## Key Features
 **Cron Job Scheduling**:
-  - Automatically detects environment variables prefixed with `RS_` to set up cron job schedules for scripts.
+  - Automatically detects environment variables prefixed with `RS_CRON_` to set up cron job schedules for scripts.
   - Supports flexible cron expressions for scheduling (e.g., "*/5 * * * *").
+
+**Parameter Support**:
+  - Allows you to pass parameters to your scripts using environment variables.
 
 **Multi-Script Execution**:
   - Supports the execution of multiple script types (`.sh`, `.py`, etc.) using an `EXTENSION_MAP` to associate the script extension with the proper interpreter.
@@ -30,15 +33,8 @@ Crondock is a solution to run cron jobs in Docker containers. It's a simple Pyth
 **Timezone Support**:
   - Converts all timestamps to the specified timezone (defaults to `Europe/Berlin` but can be customized using the `TZ` environment variable).
 
-**Script Validation**:
-  - Validates the existence of scripts in `/code/scripts/` before execution and ensures they have the correct file extension.
-  - Logs whether the scripts are present and whether the cron expressions are valid before proceeding with execution.
-
 **Automatic Logging**:
   - Provides informative logs about script execution, including success/failure messages, cron expression schedules, and detailed timestamps for each job.
-
-**Customizable Scheduling**:
-  - Detects scripts with underscore-separated folder structures, allowing for organized subfolder script execution (e.g., `folder_script.sh` runs `folder/script.sh`).
    
 **Lightweight and Extensible**:
   - Designed to be easily extensible with more interpreters or custom scheduling logic.
@@ -50,7 +46,7 @@ Before starting the container, you'll need to set some mandatory environment var
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `RS_<x>` | No | The cron expression when the script should run (e.g. `0 11 1,15 * *`). `<x>` is the name of your script (without the extension!). |
+| `RS_CRON_<x>` | **Yes** | The cron expression, full script path and optional parameters for the script seperated with "," (e.g. `0 11 1,15 * *,/code/scripts/MyFolder/testscript.sh,--verbose`). `<x>` is a placeholder and can be named anything. |
 | `TZ` | No | Specify the timezone for the container. Default is `Europe/Berlin`. |
 
 You can add as many scripts as you want, just follow the above format.
@@ -64,8 +60,8 @@ docker run -d \
     --name crondock \ 
     --restart unless-stopped \
     -v /path/to/your/scripts:/code/scripts \
-    -e RS_TESTSCRIPT="*/1 * * * *" \
-    -e RS_OTHERSCRIPT="*/5 * * * *" \
+    -e RS_CRON_TESTSCRIPT="*/1 * * * *,/code/scripts/Testscripts/test_shell.sh" \
+    -e RS_CRON_RELOAD_WEBSERVER="0 8 * * * *,/code/scripts/webserver/reload.py,-r 1 --verbose" \
     -e TZ=Europe/Berlin \
     ghcr.io/casudo/crondock:latest
 ```
@@ -82,8 +78,8 @@ services:
     volumes:
       - /path/to/your/scripts:/code/scripts
     environment:
-        - RS_TESTSCRIPT="*/1 * * * *"
-        - RS_OTHERSCRIPT="*/5 * * * *"
+        - RS_CRON_TESTSCRIPT="*/1 * * * *,/code/scripts/Testscripts/test_shell.sh"
+        - RS_CRON_RELOAD_WEBSERVER="0 8 * * * *,/code/scripts/webserver/reload.py,-r 1 --verbose"
         - TZ=Europe/Berlin
 ```
 
