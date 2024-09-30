@@ -46,7 +46,7 @@ Before starting the container, you'll need to set some mandatory environment var
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `RS_CRON_<x>` | **Yes** | The cron expression, full script path and optional parameters for the script seperated with "," (e.g. `0 11 1,15 * *,/code/scripts/MyFolder/testscript.sh,--verbose`). `<x>` is a placeholder and can be named anything. |
+| `RS_CRON_<x>` | **Yes** | The cron expression, full script path and optional parameters for the script seperated with "," (e.g. `0 11 1,15 * *!/code/scripts/MyFolder/testscript.sh!--verbose`). `<x>` is a placeholder and can be named anything. |
 | `TZ` | No | Specify the timezone for the container. Default is `Europe/Berlin`. |
 
 You can add as many scripts as you want, just follow the above format.
@@ -60,8 +60,8 @@ docker run -d \
     --name crondock \ 
     --restart unless-stopped \
     -v /path/to/your/scripts:/code/scripts \
-    -e RS_CRON_TESTSCRIPT="*/1 * * * *,/code/scripts/Testscripts/test_shell.sh" \
-    -e RS_CRON_RELOAD_WEBSERVER="0 8 * * * *,/code/scripts/webserver/reload.py,-r 1 --verbose" \
+    -e RS_CRON_TESTSCRIPT="*/1 * * * *!/code/scripts/Testscripts/test_shell.sh" \
+    -e RS_CRON_RELOAD_WEBSERVER="0 8 * * * *!/code/scripts/webserver/reload.py!-r 1 --verbose" \
     -e TZ=Europe/Berlin \
     ghcr.io/casudo/crondock:latest
 ```
@@ -78,8 +78,8 @@ services:
     volumes:
       - /path/to/your/scripts:/code/scripts
     environment:
-        - RS_CRON_TESTSCRIPT="*/1 * * * *,/code/scripts/Testscripts/test_shell.sh"
-        - RS_CRON_RELOAD_WEBSERVER="0 8 * * * *,/code/scripts/webserver/reload.py,-r 1 --verbose"
+        - RS_CRON_TESTSCRIPT="*/1 * * * *!/code/scripts/Testscripts/test_shell.sh"
+        - RS_CRON_RELOAD_WEBSERVER="0 8 * * * *!/code/scripts/webserver/reload.py!-r 1 --verbose"
         - TZ=Europe/Berlin
 ```
 
