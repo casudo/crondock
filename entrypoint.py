@@ -16,6 +16,7 @@ from pathlib import Path
 ### ----------------------------------------------------------------------------------------------------------
 ### ----------------------------------------------------------------------------------------------------------
 
+__version__ = getenv("REACT_APP_VERSION", "Warning: Couldn't load version")
 
 ### Extension map for different script types
 EXTENSION_MAP = {
@@ -89,7 +90,7 @@ def parse_cron_env_variable(env_value: str):
     Returns:
         dict: Contains 'cron_expression', 'script_path', 'parameters'
     """
-    parts = env_value.split(",")
+    parts = env_value.split("!")
     cron_expression = parts[0].strip() if len(parts) > 0 else None
     script_path_full = parts[1].strip() if len(parts) > 1 else None
     parameters = parts[2].strip().split() if len(parts) > 2 else []
@@ -128,7 +129,6 @@ def run_script(script_path_relative: str, script_path_full: str, parameters: lis
             logging.error(f"Unsupported script extension for script: {script_path_relative}")
     else:
         logging.error(f"Script not found: {script_path_relative}")
-
 
 
 def load_cron_jobs() -> list:
